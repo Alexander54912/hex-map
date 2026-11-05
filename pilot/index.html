@@ -104,7 +104,11 @@ details.how[open] summary::before{transform:rotate(45deg)}
 .mapwrap{position:relative;min-width:0;min-height:0}
 #map{position:absolute;inset:0;background:#f4f5f3}
 .leaflet-container{font-family:var(--sans)}
-.osm-gray{filter:grayscale(1) contrast(.92) brightness(1.06)}
+.tiles-street{filter:saturate(.55) brightness(1.04) contrast(.95)}
+.basemap{display:flex;gap:2px;padding:3px;background:rgba(255,255,255,.96);border-radius:10px;box-shadow:0 2px 10px rgba(21,23,28,.18)!important;border:0!important}
+.basemap button{font:600 13px/1 inherit;font-family:inherit;border:0;background:transparent;color:var(--muted,#5b6270);padding:8px 12px;border-radius:7px;cursor:pointer}
+.basemap button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.basemap button:focus-visible{outline:2px solid var(--h4);outline-offset:1px}
 #map:focus-visible{outline-offset:-3px}
 #map:focus:not(:focus-visible){outline:none}
 .mapbar{position:absolute;top:14px;left:14px;right:14px;z-index:800;display:flex;flex-wrap:wrap;gap:8px;align-items:center;pointer-events:none}
@@ -303,23 +307,32 @@ map.createPane("badges").style.zIndex = 640;
 const hexR = L.canvas({pane: "hex", padding: 0.5, tolerance: 0});
 const zoneR = L.canvas({pane: "zones", padding: 0.5});
 
-// подложка: светлая CARTO, если она недоступна — серая OSM, как в hex-map
-const cartoBase = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
-  {subdomains: "abcd", maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'});
-const cartoLabels = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
-  {subdomains: "abcd", maxZoom: 19, pane: "labels"});
-let loaded = 0, failed = 0, fellBack = false;
-function fallback(){
-  if (fellBack || loaded) return;
-  fellBack = true;
-  map.removeLayer(cartoBase); map.removeLayer(cartoLabels);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    {maxZoom: 19, className: "osm-gray", attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+// подложка: обычная карта OpenStreetMap (без ключей, названия по-русски) и спутник Esri
+const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const streetMap = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  {maxZoom: 19, className: "tiles-street", attribution: OSM_ATTR});
+const satMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  {maxZoom: 19, className: "tiles-sat", attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics"});
+const satLabels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+  {maxZoom: 19, pane: "labels"});
+let mode = "street";
+function setMode(m){
+  mode = m;
+  [streetMap, satMap, satLabels].forEach(l => map.hasLayer(l) && map.removeLayer(l));
+  if (m === "sat"){ satMap.addTo(map); satLabels.addTo(map); } else { streetMap.addTo(map); }
+  document.querySelectorAll("#basemap button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.m === m)));
+  document.getElementById("map").classList.toggle("is-sat", m === "sat");
 }
-cartoBase.on("tileload", () => loaded++);
-cartoBase.on("tileerror", () => { if (++failed >= 4) fallback(); });
-cartoBase.addTo(map); cartoLabels.addTo(map);
-setTimeout(fallback, 7000);
+const bm = L.control({position: "topright"});
+bm.onAdd = () => {
+  const d = L.DomUtil.create("div", "basemap"); d.id = "basemap";
+  d.innerHTML = '<button data-m="street" aria-pressed="true">Карта</button><button data-m="sat" aria-pressed="false">Спутник</button>';
+  L.DomEvent.disableClickPropagation(d);
+  d.addEventListener("click", e => { const t = e.target.closest("button"); if (t) setMode(t.dataset.m); });
+  return d;
+};
+bm.addTo(map);
+setMode("street");
 
 /* ---------- слой города ---------- */
 const cache = {};
@@ -333,7 +346,7 @@ function hexStyle(r, C){
   const on = inFilter(r, C) && (!state.zone || r[I.zone] === state.zone);
   // слабые гексы — ровный бледный фон без швов, сильные — отдельные плитки с тонким белым швом
   return {stroke: b > 0, color: "#ffffff", weight: 0.6, opacity: on ? 0.8 : 0.3,
-          fill: true, fillColor: RAMP[b], fillOpacity: on ? (b === 0 ? 0.45 : 0.9) : (b === 0 ? 0.1 : 0.16)};
+          fill: true, fillColor: RAMP[b], fillOpacity: on ? (b === 0 ? 0.22 : 0.78) : (b === 0 ? 0.05 : 0.12)};
 }
 function build(key){
   if (cache[key]) return cache[key];
