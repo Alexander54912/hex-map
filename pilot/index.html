@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Пилот чековых офферов</title>
+<meta name="description" content="Куда запускать чековые офферы в Пятёрочке, Магните и Перекрёстке: рейтинг гексов H3 Москвы и Петербурга за сентябрь 2026">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Слева — вывод «куда заходим», справа — карта. Карточка гекса оформлена как кассовый чек. */
+:root{
+  color-scheme: light;
+  --paper:#ffffff; --ground:#eceef1; --soft:#f5f6f8; --rule:#e4e7eb;
+  --ink:#15171c; --ink-2:#4b5260; --ink-3:#858c98;
+  --focus:#2a78d6;
+  --pyat:#e8b400; --magnit:#d41f2c; --perek:#0d5a3f;
+  --h0:#ffe8f1; --h1:#fcc3d9; --h2:#f295bb; --h3:#dc649a; --h4:#b63a77; --h5:#841e52;
+  --tint:#fff3f8;
+  --sans:"Golos Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ground);color:var(--ink);font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:400px minmax(0,1fr);height:100vh;height:100dvh}
+
+/* ---------- панель ---------- */
+.panel{background:var(--paper);border-right:1px solid var(--rule);display:flex;flex-direction:column;min-height:0;z-index:2}
+.head{padding:22px 24px 16px;border-bottom:1px solid var(--rule)}
+h1{font-size:22px;line-height:1.2;font-weight:650;letter-spacing:-.01em;margin:0 0 6px;text-wrap:balance}
+.sub{margin:0 0 16px;color:var(--ink-2);font-size:13px;text-wrap:pretty}
+.seg{display:inline-flex;background:var(--soft);border:1px solid var(--rule);border-radius:10px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;padding:7px 14px;border-radius:7px;cursor:pointer;font-weight:500;color:var(--ink-2);white-space:nowrap}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgba(21,23,28,.12),0 0 0 1px rgba(21,23,28,.06)}
+.city{display:flex;width:100%}
+.city button{flex:1}
+
+.scroll{overflow:auto;flex:1;padding:18px 24px 28px;scrollbar-width:thin}
+.lead{margin:0 0 22px;font-size:15px;line-height:1.5;text-wrap:pretty}
+h2{font-size:15px;font-weight:650;margin:0 0 6px}
+section{margin-bottom:24px}
+
+/* зоны старта */
+.zones,.more{list-style:none;margin:0;padding:0}
+.zone{display:grid;grid-template-columns:34px 1fr;gap:0 10px;width:100%;text-align:left;background:transparent;border:0;
+  padding:14px 10px 14px 8px;margin:0 -10px 0 -8px;width:calc(100% + 18px);border-radius:10px;cursor:pointer;border-top:1px solid var(--rule)}
+.zones li:first-child .zone{border-top-color:transparent}
+.zone:hover{background:var(--soft)}
+.zone[aria-pressed="true"]{background:var(--tint);box-shadow:inset 3px 0 0 var(--h4)}
+.zrank{font-size:28px;line-height:1;font-weight:600;color:var(--ink-3);font-variant-numeric:tabular-nums;padding-top:2px}
+.zone[aria-pressed="true"] .zrank,.zones li:first-child .zrank{color:var(--h5)}
+.ztitle{display:block;font-size:16px;font-weight:600;line-height:1.3;text-wrap:balance}
+.zmeta{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin-top:3px;color:var(--ink-2);font-size:12.5px}
+.tag{display:inline-block;font-size:11.5px;font-weight:600;line-height:1;padding:4px 7px;border-radius:999px;background:var(--ink);color:#fff}
+.tag.soft{background:var(--soft);color:var(--ink-2);font-weight:500;box-shadow:inset 0 0 0 1px var(--rule)}
+.zstats{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-top:12px}
+.zstats b{display:block;font-size:17px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap}
+.zstats i{display:block;font-style:normal;font-size:12px;color:var(--ink-2);line-height:1.3}
+.chains{margin-top:12px}
+.cbar{display:flex;height:6px;border-radius:3px;overflow:hidden;gap:2px;background:var(--paper)}
+.cbar span{display:block;height:100%;background:var(--c)}
+.clegend{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:6px;font-size:12px;color:var(--ink-2)}
+.clegend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.clegend b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);flex:none}
+
+/* следующие зоны */
+.mrow{display:grid;grid-template-columns:22px 1fr auto;gap:2px 10px;width:100%;text-align:left;background:transparent;border:0;
+  padding:10px 10px 10px 8px;margin:0 -10px 0 -8px;width:calc(100% + 18px);border-radius:8px;cursor:pointer;border-top:1px solid var(--rule);align-items:baseline}
+.more li:first-child .mrow{border-top-color:transparent}
+.mrow:hover{background:var(--soft)}
+.mrow[aria-pressed="true"]{background:var(--tint);box-shadow:inset 3px 0 0 var(--h4)}
+.mrow .n{font-weight:600;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.mrow .t{font-weight:550}
+.mrow .p{grid-column:2;color:var(--ink-2);font-size:12.5px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+.mrow .v{grid-column:3;grid-row:1;text-align:right;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mrow .s{grid-column:3;grid-row:2;text-align:right;color:var(--ink-2);font-size:12.5px;white-space:nowrap}
+
+/* город целиком */
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;margin:10px 0 0;padding:0}
+.facts div{margin:0}
+.facts dt{font-size:12px;color:var(--ink-2);line-height:1.3}
+.facts dd{margin:0 0 2px;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;order:-1}
+.facts div{display:flex;flex-direction:column}
+.note{margin:12px 0 0;font-size:12.5px;color:var(--ink-2);text-wrap:pretty}
+
+details.how{border-top:1px solid var(--rule);padding-top:14px}
+details.how summary{cursor:pointer;font-weight:650;font-size:15px;list-style:none;display:flex;align-items:center;gap:8px}
+details.how summary::-webkit-details-marker{display:none}
+details.how summary::before{content:"";width:7px;height:7px;border-right:2px solid var(--ink-2);border-bottom:2px solid var(--ink-2);transform:rotate(-45deg);transition:transform .15s}
+details.how[open] summary::before{transform:rotate(45deg)}
+.how ul{margin:10px 0 0;padding-left:18px;color:var(--ink-2);font-size:13px}
+.how li{margin-bottom:7px}
+.formula{font-family:var(--mono);font-size:12px;background:var(--soft);border-radius:6px;padding:8px 10px;color:var(--ink);margin:10px 0 0;white-space:normal}
+
+/* ---------- карта ---------- */
+.mapwrap{position:relative;min-width:0;min-height:0}
+#map{position:absolute;inset:0;background:#f4f5f3}
+.leaflet-container{font-family:var(--sans)}
+.osm-gray{filter:grayscale(1) contrast(.92) brightness(1.06)}
+#map:focus-visible{outline-offset:-3px}
+#map:focus:not(:focus-visible){outline:none}
+.mapbar{position:absolute;top:14px;left:14px;right:14px;z-index:800;display:flex;flex-wrap:wrap;gap:8px;align-items:center;pointer-events:none}
+.mapbar > *{pointer-events:auto}
+.mapbar .seg{background:rgba(255,255,255,.94);box-shadow:0 2px 10px rgba(21,23,28,.10);backdrop-filter:blur(6px)}
+.ghost{border:1px solid var(--rule);background:rgba(255,255,255,.94);border-radius:10px;padding:9px 13px;cursor:pointer;font-weight:500;color:var(--ink-2);box-shadow:0 2px 10px rgba(21,23,28,.10)}
+.ghost:hover{color:var(--ink)}
+.legend{position:absolute;left:14px;bottom:22px;z-index:800;background:rgba(255,255,255,.95);border-radius:10px;padding:10px 12px 9px;
+  box-shadow:0 2px 10px rgba(21,23,28,.10);font-size:12px;color:var(--ink-2)}
+.legend .lt{color:var(--ink);font-weight:600;margin-bottom:6px}
+.ramp{display:grid;grid-template-columns:repeat(6,34px);gap:2px}
+.ramp i{height:10px;border-radius:2px}
+.ramp i:first-child{border-radius:5px 2px 2px 5px}.ramp i:last-child{border-radius:2px 5px 5px 2px}
+.ticks{display:grid;grid-template-columns:repeat(6,34px);gap:2px;margin-top:3px;font-variant-numeric:tabular-nums}
+.ticks span{margin-left:-1px}
+.lz{display:flex;align-items:center;gap:7px;margin-top:8px}
+.lz i{width:22px;height:12px;border:2px solid var(--ink);border-radius:3px;box-shadow:0 0 0 2px #fff}
+.hint{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:790;background:var(--ink);color:#fff;font-size:13px;
+  padding:8px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(21,23,28,.25);transition:opacity .3s;white-space:nowrap}
+.hint.off{opacity:0;pointer-events:none}
+
+/* бейджи зон */
+.zb-wrap{background:none;border:0}
+.zbadge{width:28px;height:28px;border-radius:50%;border:2px solid #fff;background:var(--ink);color:#fff;font:600 13px/1 var(--sans);
+  display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 6px rgba(21,23,28,.35);padding:0;transition:transform .12s}
+.zbadge:hover,.zbadge.on{transform:scale(1.18);background:var(--h5)}
+
+/* ---------- чек гекса ---------- */
+.receipt{position:absolute;z-index:900;width:304px;background:var(--paper);padding:14px 16px 14px;border-radius:8px 8px 0 0;
+  pointer-events:none;font-size:13px;filter:drop-shadow(0 10px 22px rgba(21,23,28,.20)) drop-shadow(0 1px 2px rgba(21,23,28,.15))}
+.receipt::after{content:"";position:absolute;left:0;right:0;bottom:-7px;height:7px;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7'%3E%3Cpath d='M0 0h12L6 7z' fill='%23fff'/%3E%3C/svg%3E") repeat-x}
+.receipt[hidden]{display:none}
+.r-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+.r-area{font-size:17px;font-weight:650;line-height:1.25;margin-top:6px}
+.r-parent{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;color:var(--ink-2);font-size:12.5px;margin-top:2px}
+.r-score{display:flex;align-items:baseline;gap:8px;margin-top:12px}
+.r-big{font-size:34px;line-height:1;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.r-unit{color:var(--ink-2);font-size:12.5px}
+.parts{display:grid;grid-template-columns:auto 1fr 28px;gap:5px 10px;align-items:center;margin-top:10px;font-size:12.5px}
+.parts .bar{height:6px;background:var(--soft);border-radius:3px;overflow:hidden}
+.parts .bar i{display:block;height:100%;background:var(--h4);border-radius:3px}
+.parts b{font-family:var(--mono);font-weight:600;text-align:right;font-size:12px}
+.parts .w{color:var(--ink-3)}
+.cut{border:0;border-top:1.5px dashed #cfd3d9;margin:12px 0 10px}
+.lines{margin:0;display:grid;gap:5px}
+.lines div{display:flex;align-items:baseline;gap:6px}
+.lines dt{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.lines dt::after{content:"";flex:1}
+.lines div::before{content:none}
+.lines .lead-dots{flex:1;border-bottom:1.5px dotted #c3c8cf;transform:translateY(-3px);min-width:12px}
+.lines dd{margin:0;font-family:var(--mono);font-weight:500;font-size:12.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.lines .none dd,.lines .none dt{color:var(--ink-3)}
+.lines .total{margin-top:4px;font-weight:650}
+.lines .total dd{font-weight:600;font-size:13.5px}
+.r-store{margin:10px 0 0;font-size:12px;color:var(--ink-2);line-height:1.35}
+.r-close{display:none}
+
+/* ---------- мобильная раскладка ---------- */
+@media (max-width: 860px){
+  .app{display:flex;flex-direction:column;height:auto;min-height:100dvh}
+  .panel{border-right:0;order:2;min-height:auto}
+  .head{order:1;position:sticky;top:0;background:var(--paper);z-index:5}
+  .scroll{overflow:visible;padding:18px 16px 28px}
+  .head{padding:16px}
+  .mapwrap{order:1;height:62vh;height:62dvh;flex:none}
+  .app > .panel{display:contents}
+  .app > .panel > .head{order:0}
+  .app > .panel > .scroll{order:2;background:var(--paper)}
+  h1{font-size:19px}
+  .sub{margin-bottom:12px}
+  .legend{bottom:10px;left:10px;padding:7px 9px 6px;font-size:11px}
+  .legend .lt{margin-bottom:4px}
+  .ramp,.ticks{grid-template-columns:repeat(6,26px)}
+  .lz{margin-top:5px}
+  .mapbar{top:10px;left:10px;right:10px;flex-wrap:nowrap}
+  .mapbar .seg button{padding:7px 10px}
+  .ghost{padding:8px 11px}
+  .wide{display:none}
+  .hint{display:none}
+  .receipt{left:10px !important;right:10px;top:auto !important;bottom:12px;width:auto;pointer-events:auto;border-radius:8px;max-height:calc(100% - 70px);overflow:auto;z-index:1100}
+  .receipt::after{display:none}
+  .r-top{padding-right:36px}
+  .r-close{display:block;position:absolute;top:8px;right:8px;border:0;background:var(--soft);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;color:var(--ink-2)}
+}
+@media (hover: none){
+  .receipt{pointer-events:auto}
+  .r-close{display:block;position:absolute;top:8px;right:8px;border:0;background:var(--soft);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;color:var(--ink-2)}
+}
+@media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <header class="head">
+      <h1>Куда запускать чековые офферы</h1>
+      <p class="sub">Пятёрочка, Магнит и Перекрёсток. Рейтинг гексов H3 по данным за сентябрь 2026</p>
+      <div class="seg city" role="group" aria-label="Город">
+        <button type="button" data-city="msk" aria-pressed="true">Москва</button>
+        <button type="button" data-city="spb" aria-pressed="false">Санкт-Петербург</button>
+      </div>
+    </header>
+    <div class="scroll">
+      <p class="lead" id="lead"></p>
+      <section>
+        <h2>Куда заходим</h2>
+        <ol class="zones" id="zones"></ol>
+      </section>
+      <section>
+        <h2>Следующие зоны</h2>
+        <ol class="more" id="more"></ol>
+      </section>
+      <section id="citysum"></section>
+      <details class="how">
+        <summary>Как считаем</summary>
+        <p class="formula">балл = 0,5 × траты в сетях + 0,3 × клиенты + 0,2 × мерчи</p>
+        <ul>
+          <li>Каждая часть переводится в 0–100: значение гекса делим на 99-й перцентиль по городу. Траты нормируются отдельно для каждой сети, берётся лучшая из трёх.</li>
+          <li>Траты — оборот по картам банка в магазинах сетей за сентябрь 2026. Магазины без трат не учитываются.</li>
+          <li>Зона — сильные гексы (топ-200 в Москве, топ-100 в Питере), между которыми не больше одного гекса, плюс одно кольцо соседних гексов. Цифры зоны посчитаны по всем гексам внутри контура. Порядок зон — по сумме баллов сильных гексов.</li>
+          <li>Клиенты — уникальные клиенты банка в гексе. Один человек попадает в несколько соседних гексов, поэтому по зоне показываем среднее на гекс, а не сумму.</li>
+          <li>Граница города взята из слоя гексов, поэтому в «Москву» входит ближнее Подмосковье, а в «Петербург» — Мурино и Кудрово.</li>
+        </ul>
+      </details>
+    </div>
+  </aside>
+
+  <main class="mapwrap">
+    <div id="map" role="application" aria-label="Карта гексов с рейтингом"></div>
+    <div class="mapbar">
+      <div class="seg" role="group" aria-label="Какие гексы показать" id="filter">
+        <button type="button" data-f="all" aria-pressed="true">Все<span class="wide"> гексы</span></button>
+        <button type="button" data-f="strong" aria-pressed="false" id="f-strong">Топ-200</button>
+        <button type="button" data-f="top" aria-pressed="false" id="f-top">Топ-50</button>
+      </div>
+      <button type="button" class="ghost" id="reset">Весь город</button>
+    </div>
+    <div class="legend" id="legend" aria-hidden="true">
+      <div class="lt">Балл гекса</div>
+      <div class="ramp"><i style="background:var(--h0)"></i><i style="background:var(--h1)"></i><i style="background:var(--h2)"></i><i style="background:var(--h3)"></i><i style="background:var(--h4)"></i><i style="background:var(--h5)"></i></div>
+      <div class="ticks"><span>0</span><span>20</span><span>40</span><span>55</span><span>70</span><span>85+</span></div>
+      <div class="lz"><i></i>Зона пилота, цифра — её место</div>
+    </div>
+    <div class="hint" id="hint">Наведите на гекс, чтобы увидеть его чек</div>
+    <div class="receipt" id="receipt" hidden></div>
+  </main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+<script src="data.js"></script>
+<script>
+(() => {
+const P = window.PILOT;
+const I = Object.fromEntries(P.cols.map((c, i) => [c, i]));
+const CHAINS = [
+  {name: "Пятёрочка", c: "var(--pyat)", n: I.pN, s: I.pSum},
+  {name: "Магнит", c: "var(--magnit)", n: I.mN, s: I.mSum},
+  {name: "Перекрёсток", c: "var(--perek)", n: I.xN, s: I.xSum},
+];
+const STORE_CHAIN = {"Пятерочка": "Пятёрочка", "Магнит": "Магнит", "Перекресток": "Перекрёсток"};
+const BINS = [0, 20, 40, 55, 70, 85];
+const RAMP = ["#ffe8f1", "#fcc3d9", "#f295bb", "#dc649a", "#b63a77", "#841e52"];
+const INK = "#15171c";
+const touch = matchMedia("(hover: none)").matches;
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const state = {city: "msk", filter: "all", zone: 0, hover: null};
+
+/* ---------- формат чисел ---------- */
+const nf = new Intl.NumberFormat("ru-RU");
+const f1 = v => v.toLocaleString("ru-RU", {maximumFractionDigits: 1});
+function money(v){
+  if (v >= 1e9) return f1(v / 1e9) + " млрд ₽";
+  if (v >= 1e8) return nf.format(Math.round(v / 1e6)) + " млн ₽";
+  if (v >= 1e6) return f1(v / 1e6) + " млн ₽";
+  if (v >= 1e3) return nf.format(Math.round(v / 1e3)) + " тыс. ₽";
+  return nf.format(Math.round(v)) + " ₽";
+}
+function thousands(v){ return v >= 1e4 ? nf.format(Math.round(v / 1e3)) + " тыс." : nf.format(v); }
+function plural(n, one, few, many){ const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? one : m >= 2 && m <= 4 && (h < 12 || h > 14) ? few : many; }
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[ch]));
+const binOf = s => { let i = 0; while (i < BINS.length - 1 && s >= BINS[i + 1]) i++; return i; };
+
+/* ---------- карта ---------- */
+const map = L.map("map", {zoomControl: false, preferCanvas: true, attributionControl: true, zoomSnap: 0.5, zoomDelta: 0.5, wheelPxPerZoomLevel: 90});
+window.pilotMap = map;
+map.attributionControl.setPrefix(false);
+L.control.zoom({position: "bottomright"}).addTo(map);
+map.createPane("hex").style.zIndex = 410;
+map.createPane("zones").style.zIndex = 420;
+map.createPane("labels").style.zIndex = 430;
+map.getPane("labels").style.pointerEvents = "none";
+map.getPane("zones").style.pointerEvents = "none";   // контуры зон не должны перехватывать мышь у гексов
+map.createPane("badges").style.zIndex = 640;
+const hexR = L.canvas({pane: "hex", padding: 0.5, tolerance: 0});
+const zoneR = L.canvas({pane: "zones", padding: 0.5});
+
+// подложка: светлая CARTO, если она недоступна — серая OSM, как в hex-map
+const cartoBase = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
+  {subdomains: "abcd", maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'});
+const cartoLabels = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
+  {subdomains: "abcd", maxZoom: 19, pane: "labels"});
+let loaded = 0, failed = 0, fellBack = false;
+function fallback(){
+  if (fellBack || loaded) return;
+  fellBack = true;
+  map.removeLayer(cartoBase); map.removeLayer(cartoLabels);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {maxZoom: 19, className: "osm-gray", attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+}
+cartoBase.on("tileload", () => loaded++);
+cartoBase.on("tileerror", () => { if (++failed >= 4) fallback(); });
+cartoBase.addTo(map); cartoLabels.addTo(map);
+setTimeout(fallback, 7000);
+
+/* ---------- слой города ---------- */
+const cache = {};
+function inFilter(r, C){
+  if (state.filter === "strong") return r[I.place] <= C.strongN;
+  if (state.filter === "top") return r[I.place] <= C.topN;
+  return true;
+}
+function hexStyle(r, C){
+  const b = binOf(r[I.score]);
+  const on = inFilter(r, C) && (!state.zone || r[I.zone] === state.zone);
+  // слабые гексы — ровный бледный фон без швов, сильные — отдельные плитки с тонким белым швом
+  return {stroke: b > 0, color: "#ffffff", weight: 0.6, opacity: on ? 0.8 : 0.3,
+          fill: true, fillColor: RAMP[b], fillOpacity: on ? (b === 0 ? 0.45 : 0.9) : (b === 0 ? 0.1 : 0.16)};
+}
+function build(key){
+  if (cache[key]) return cache[key];
+  const C = P.cities[key];
+  const hexLayer = L.layerGroup(), zoneLayer = L.layerGroup(), badgeLayer = L.layerGroup();
+  const polys = [];
+  for (const r of C.hexes){
+    const poly = L.polygon(h3.cellToBoundary(r[I.hex]), {renderer: hexR, pane: "hex", ...hexStyle(r, C)});
+    poly._row = r;
+    poly.on("mouseover", e => hoverOn(poly, e));
+    poly.on("mouseout", () => hoverOff(poly));
+    poly.on("click", e => { L.DomEvent.stopPropagation(e); if (touch) hoverOn(poly, e, true); });
+    hexLayer.addLayer(poly); polys.push(poly);
+  }
+  const zones = {};
+  for (const z of C.zones){
+    const cells = z.cells;   // сильные гексы зоны и одно кольцо соседей вокруг них
+    const shape = h3.cellsToMultiPolygon(cells);
+    const casing = L.polygon(shape, {renderer: zoneR, pane: "zones", color: "#ffffff", weight: 6, opacity: 0.95, fill: false, interactive: false, lineJoin: "round"});
+    const line = L.polygon(shape, {renderer: zoneR, pane: "zones", color: INK, weight: 2, opacity: 1, fill: false, interactive: false, lineJoin: "round"});
+    const pts = cells.map(c => h3.cellToLatLng(c));
+    const mid = pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length], [0, 0]);
+    const anchor = pts.reduce((best, p) => (Math.hypot(p[0] - mid[0], p[1] - mid[1]) < Math.hypot(best[0] - mid[0], best[1] - mid[1]) ? p : best), pts[0]);
+    const icon = L.divIcon({className: "zb-wrap", iconSize: [28, 28], iconAnchor: [14, 14],
+      html: `<button type="button" class="zbadge" data-zone="${z.rank}" aria-label="Зона ${z.rank}: ${esc(z.title)}">${z.rank}</button>`});
+    const badge = L.marker(anchor, {icon, pane: "badges", keyboard: false, riseOnHover: true});
+    badge.on("click", () => selectZone(state.zone === z.rank ? 0 : z.rank, true));
+    zoneLayer.addLayer(casing); zoneLayer.addLayer(line); badgeLayer.addLayer(badge);
+    zones[z.rank] = {line, badge, bounds: L.latLngBounds(pts).pad(0.15), z};
+  }
+  // стартовый вид — по зонам пилота, чтобы город не терялся из-за редких окраинных гексов
+  const zoneCells = C.zones.flatMap(z => z.cells);
+  const bounds = L.latLngBounds((zoneCells.length ? zoneCells : C.hexes.map(r => r[I.hex])).map(h => h3.cellToLatLng(h))).pad(0.12);
+  return cache[key] = {C, hexLayer, zoneLayer, badgeLayer, polys, zones, bounds};
+}
+
+let cur = null;
+function showCity(key){
+  hideReceipt();
+  if (cur){ map.removeLayer(cur.hexLayer); map.removeLayer(cur.zoneLayer); map.removeLayer(cur.badgeLayer); }
+  state.city = key; state.zone = 0;
+  cur = build(key);
+  cur.hexLayer.addTo(map); cur.zoneLayer.addTo(map); cur.badgeLayer.addTo(map);
+  restyle();
+  fitCity(false);
+  renderPanel();
+}
+function restyle(){
+  for (const p of cur.polys) p.setStyle(hexStyle(p._row, cur.C));
+  for (const [rank, o] of Object.entries(cur.zones)){
+    const on = +rank === state.zone;
+    o.line.setStyle({weight: on ? 3.5 : 2, opacity: state.zone && !on ? 0.35 : 1});
+    const el = o.badge.getElement(); if (el) el.querySelector(".zbadge").classList.toggle("on", on);
+  }
+  document.querySelectorAll("[data-zone]").forEach(el => {
+    if (el.tagName === "BUTTON" && !el.classList.contains("zbadge")) el.setAttribute("aria-pressed", +el.dataset.zone === state.zone);
+  });
+}
+function fitCity(animate){
+  const pad = innerWidth > 860 ? [40, 40] : [12, 12];
+  map.fitBounds(cur.bounds, {padding: pad, animate: animate && !reduce});
+}
+function selectZone(rank, fly){
+  state.zone = rank;
+  restyle();
+  if (rank && fly) map.flyToBounds(cur.zones[rank].bounds, {duration: reduce ? 0 : 0.7, maxZoom: 14});
+  if (!rank && fly) fitCity(true);
+}
+
+/* ---------- чек гекса ---------- */
+const receipt = document.getElementById("receipt");
+const hint = document.getElementById("hint");
+if (touch) hint.textContent = "Нажмите на гекс, чтобы увидеть его чек";
+function receiptHTML(r, C){
+  const area = C.areas[r[I.area]], parent = C.parents[r[I.parent]];
+  const zone = r[I.zone] ? C.zones.find(z => z.rank === r[I.zone]) : null;
+  const best = r[I.best] >= 0 ? CHAINS[r[I.best]].name : null;
+  const part = (label, v, w) => `<span>${label} <span class="w">${w}</span></span><span class="bar"><i style="width:${Math.max(0, Math.min(100, v))}%"></i></span><b>${Math.round(v)}</b>`;
+  const line = (dt, dd, cls = "") => `<div class="${cls}"><dt>${dt}</dt><span class="lead-dots"></span><dd>${dd}</dd></div>`;
+  let chains = "", total = 0, cnt = 0;
+  for (const ch of CHAINS){
+    const n = r[ch.n], s = r[ch.s]; total += s; cnt += n;
+    chains += line(`<i class="dot" style="--c:${ch.c}"></i>${ch.name}${n ? " × " + n : ""}`, n ? money(s) : "нет", n ? "" : "none");
+  }
+  chains += line(`Потенциал сетей`, cnt ? money(total) : "—", "total");
+  const store = r[I.store] ? `<p class="r-store">Больше всего трат: ${esc(STORE_CHAIN[r[I.storeChain]] || r[I.storeChain])}, ${esc(r[I.store])}</p>` : "";
+  return `<button type="button" class="r-close" aria-label="Закрыть">×</button>
+    <div class="r-top"><span>№ ${nf.format(r[I.place])} из ${nf.format(C.hexes.length)}</span><span>${r[I.hex]}</span></div>
+    <div class="r-area">${esc(area)}</div>
+    <div class="r-parent">${esc(parent || C.name)}${zone ? ` <span class="tag">Зона ${zone.rank}</span>` : ""}${r[I.oblast] ? ` <span class="tag soft">область</span>` : ""}</div>
+    <div class="r-score"><span class="r-big">${f1(r[I.score])}</span><span class="r-unit">балл из 100</span></div>
+    <div class="parts">
+      ${part("Траты в сетях", r[I.spendScore], "50%")}
+      ${part("Клиенты", r[I.usersScore], "30%")}
+      ${part("Мерчи", r[I.merchScore], "20%")}
+    </div>
+    <hr class="cut">
+    <dl class="lines">
+      ${line("Клиентов в гексе", nf.format(r[I.users]))}
+      ${line("Мерчантов", nf.format(r[I.merch]))}
+      ${line("Точек партнёров", nf.format(r[I.points]))}
+      ${line("Оборот мерчей", r[I.gmv] >= 0 ? money(r[I.gmv]) : "нет данных")}
+    </dl>
+    <hr class="cut">
+    <dl class="lines">${chains}</dl>
+    ${best && cnt ? `<p class="r-store">Балл трат считается по сети-лидеру: ${best}</p>` : ""}
+    ${store}`;
+}
+function placeReceipt(pt){
+  if (innerWidth <= 860) return;
+  const box = map.getContainer().getBoundingClientRect();
+  const w = receipt.offsetWidth, h = receipt.offsetHeight, gap = 18;
+  let x = pt.x + gap, y = pt.y - h / 2;
+  if (x + w > box.width - 10) x = pt.x - w - gap;
+  y = Math.max(64, Math.min(y, box.height - h - 18));
+  receipt.style.left = x + "px"; receipt.style.top = y + "px";
+}
+function hoverOn(poly, e, pinned){
+  if (state.hover && state.hover !== poly) hoverOff(state.hover);
+  state.hover = poly;
+  poly.setStyle({stroke: true, color: INK, weight: 2.2, opacity: 1});
+  poly.bringToFront();
+  receipt.innerHTML = receiptHTML(poly._row, cur.C);
+  receipt.hidden = false;
+  const close = receipt.querySelector(".r-close");
+  if (close) close.addEventListener("click", ev => { ev.stopPropagation(); hideReceipt(); });
+  if (e && e.containerPoint) placeReceipt(e.containerPoint);
+  hint.classList.add("off");
+}
+function hoverOff(poly){
+  if (touch && state.hover === poly) return;
+  poly.setStyle(hexStyle(poly._row, cur.C));
+  if (state.hover === poly){ state.hover = null; receipt.hidden = true; }
+}
+function hideReceipt(){
+  if (state.hover){ const p = state.hover; state.hover = null; p.setStyle(hexStyle(p._row, cur.C)); }
+  receipt.hidden = true;
+}
+map.on("mousemove", e => { if (state.hover && !touch) placeReceipt(e.containerPoint); });
+map.on("click", () => { if (touch) hideReceipt(); });
+map.on("zoomstart movestart", () => { if (!touch) hideReceipt(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape"){ hideReceipt(); if (state.zone) selectZone(0, true); } });
+
+/* ---------- панель ---------- */
+function chainBar(st){
+  const sum = st.reduce((a, b) => a + b, 0) || 1;
+  return `<div class="chains"><div class="cbar" aria-hidden="true">${CHAINS.map((c, i) => st[i] ? `<span style="--c:${c.c};flex:${st[i] / sum}"></span>` : "").join("")}</div>
+    <div class="clegend">${CHAINS.map((c, i) => `<span><i class="dot" style="--c:${c.c}"></i><b>${st[i]}</b> ${c.name}</span>`).join("")}</div></div>`;
+}
+function oblastTag(z){
+  if (z.inCity === 0) return `<span class="tag soft">область</span>`;
+  if (z.inCity < z.n) return `<span class="tag soft">частично область</span>`;
+  return "";
+}
+function zoneItem(z){
+  const stores = z.stores.reduce((a, b) => a + b, 0);
+  return `<li><button type="button" class="zone" data-zone="${z.rank}" aria-pressed="false">
+    <span class="zrank">${z.rank}</span>
+    <span>
+      <span class="ztitle">${esc(z.title)}</span>
+      <span class="zmeta">${z.rank === 1 ? `<span class="tag">Старт</span>` : ""}<span>${esc(z.parent)}, ${z.n} ${plural(z.n, "гекс", "гекса", "гексов")}, около ${z.km2} км², лучший гекс — № ${z.best}</span>${oblastTag(z)}</span>
+      <span class="zstats">
+        <span><b>${money(z.spend)}</b><i>трат в сетях за месяц, ${f1(z.share)}% города</i></span>
+        <span><b>${stores}</b><i>${plural(stores, "магазин", "магазина", "магазинов")} сетей</i></span>
+        <span><b>${nf.format(z.partners)}</b><i>${plural(z.partners, "точка", "точки", "точек")} партнёров</i></span>
+        <span><b>${thousands(z.usersAvg)}</b><i>клиентов на гекс</i></span>
+      </span>
+      ${chainBar(z.stores)}
+    </span></button></li>`;
+}
+function zoneRow(z){
+  const stores = z.stores.reduce((a, b) => a + b, 0);
+  return `<li><button type="button" class="mrow" data-zone="${z.rank}" aria-pressed="false">
+    <span class="n">${z.rank}</span><span class="t">${esc(z.title)}</span><span class="v">${money(z.spend)}</span>
+    <span class="p">${esc(z.parent)} ${oblastTag(z)}</span><span class="s">${stores} ${plural(stores, "магазин", "магазина", "магазинов")}</span>
+  </button></li>`;
+}
+function renderPanel(){
+  const C = cur.C, S = C.summary;
+  document.getElementById("lead").textContent = C.lead;
+  document.getElementById("zones").innerHTML = C.zones.slice(0, 3).map(zoneItem).join("");
+  document.getElementById("more").innerHTML = C.zones.slice(3).map(zoneRow).join("");
+  const stores = S.stores.reduce((a, b) => a + b, 0);
+  const cityWord = key => key === "msk" ? "Москвы" : "Петербурга";
+  document.getElementById("citysum").innerHTML = `<h2>Весь город</h2>
+    <dl class="facts">
+      <div><dd>${nf.format(S.hexes)}</dd><dt>гексов, из них ${nf.format(S.hexesInCity)} в границах ${cityWord(state.city)}</dt></div>
+      <div><dd>${money(S.spend)}</dd><dt>трат по картам в трёх сетях за сентябрь</dt></div>
+      <div><dd>${nf.format(stores)}</dd><dt>${plural(stores, "магазин", "магазина", "магазинов")} сетей с тратами</dt></div>
+      <div><dd>${nf.format(S.partners)}</dd><dt>${plural(S.partners, "точка", "точки", "точек")} партнёров</dt></div>
+    </dl>
+    <p class="note">Три первые зоны — это ${S.top3Hexes} ${plural(S.top3Hexes, "гекс", "гекса", "гексов")} (около ${S.top3Km2} км²), ${S.top3Stores} ${plural(S.top3Stores, "магазин", "магазина", "магазинов")} сетей и ${f1(S.top3Share)}% всех трат в сетях города.</p>`;
+  document.getElementById("f-strong").textContent = "Топ-" + C.strongN;
+  document.getElementById("f-top").textContent = "Топ-" + C.topN;
+  document.querySelectorAll(".zone, .mrow").forEach(b => b.addEventListener("click", () => {
+    const r = +b.dataset.zone;
+    selectZone(state.zone === r ? 0 : r, true);
+    if (innerWidth <= 860) document.getElementById("map").scrollIntoView({behavior: reduce ? "auto" : "smooth", block: "start"});
+  }));
+  restyle();
+}
+
+/* ---------- управление ---------- */
+document.querySelectorAll(".city button").forEach(b => b.addEventListener("click", () => {
+  if (b.dataset.city === state.city) return;
+  document.querySelectorAll(".city button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  showCity(b.dataset.city);
+}));
+document.querySelectorAll("#filter button").forEach(b => b.addEventListener("click", () => {
+  state.filter = b.dataset.f;
+  document.querySelectorAll("#filter button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  restyle();
+}));
+document.getElementById("reset").addEventListener("click", () => { selectZone(0, false); fitCity(true); });
+
+showCity("msk");
+})();
+</script>
+</body>
+</html>
